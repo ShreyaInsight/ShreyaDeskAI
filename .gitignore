@@ -32,3 +32,6 @@ audit/
 
 # Loose local reference image
 /sample.png
+
+# Private local project brief
+README_LOCAL.md

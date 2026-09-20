@@ -1,0 +1,37 @@
+import { test, expect } from '@playwright/test'
+import fs from 'node:fs/promises'
+const trade = {id:7,symbol:'TATASTEEL',mode:'live',timestamp:'2026-09-04T10:00:00+05:30',entry_time:'2026-09-04T10:00:00+05:30',entry_price:100,quantity:10,exit_time:'2026-09-05T10:00:00+05:30',exit_price:110,duration_hours:24,pnl:100,pnl_pct:10,status:'CLOSED',exit_reason:'SELL / TP hit'}
+const order = {id:1,symbol:'TATASTEEL',mode:'live',action:'BUY',requested_qty:10,filled_quantity:10,order_type:'LIMIT',requested_price:101,fill_price:100,display_status:'COMPLETE',timestamp:trade.timestamp,kite_order_id:'broker-123',product:'CNC',position_id:7}
+const log = {id:'order-1',symbol:'TATASTEEL',mode:'live',action:'BUY',outcome_type:'OK',outcome:'Broker accepted; COMPLETE',timestamp:trade.timestamp,check:'BUY / scanner signal',kite_order_id:'broker-123',position_id:7}
+test('analytics filters, metrics, linked trades, CSV and mode separation', async ({ page }, info) => {
+ const errors=[];page.on('pageerror',e=>errors.push(e.message))
+ await page.route('**/api/session',r=>r.fulfill({json:{connected:true}}))
+ await page.route('**/api/analytics?mode=*',r=>r.fulfill({json:r.request().url().endsWith('paper') ? {mode:'paper',orders:[],trades:[],logs:[],warnings:[],updated_at:trade.timestamp} : {mode:'live',orders:[order],trades:[trade,{...trade,id:8,symbol:'OPENAPP',status:'OPEN',exit_time:null,exit_price:null,pnl:null,pnl_pct:null}, ...[-50,-100,200].map((pnl,i)=>({...trade,id:9+i,symbol:'CLOSED'+i,pnl,pnl_pct:pnl/10,exit_time:`2026-09-0${6+i}T10:00:00+05:30`}))],logs:[log],warnings:[],updated_at:trade.timestamp}}))
+ await page.request.post('/api/login',{data:{username:'fixture-user',password:'fixture-password'}})
+ await page.goto('/')
+ if(info.project.name==='mobile')await page.getByRole('button',{name:'Open navigation menu'}).click()
+ await page.getByRole('button',{name:/Analytics/}).click()
+ await expect(page.getByRole('heading',{name:'Analytics',exact:true,level:2})).toBeVisible()
+ await expect(page.getByRole('cell',{name:'broker-123',exact:true})).toBeVisible()
+ await page.getByLabel('Symbol',{exact:true}).fill('MISSING')
+ await expect(page.getByText('No records match this view.')).toBeVisible()
+ await page.getByLabel('Symbol',{exact:true}).fill('')
+ const downloadPromise=page.waitForEvent('download');await page.getByRole('button',{name:'Export CSV'}).click()
+ const download=await downloadPromise;expect(await fs.readFile(await download.path(),'utf8')).toContain('broker-123')
+ await page.getByRole('button',{name:'Order Logs',exact:true}).click()
+ await page.getByRole('button',{name:'#7',exact:true}).click()
+ await expect(page.getByText('Showing linked trade #7.',{exact:false})).toBeVisible()
+ await expect(page.locator('.analytics-metric').filter({hasText:'Realized gross P&L'})).toContainText('100.00')
+ await expect(page.getByRole('cell',{name:'SELL / TP hit'})).toBeVisible()
+ await page.getByRole('button',{name:'Show all trades'}).click()
+ await expect(page.locator('.analytics-metric').filter({hasText:'Realized gross P&L'})).toContainText('150.00')
+ await expect(page.locator('.analytics-metric').filter({hasText:'Max realized drawdown'})).toContainText('150.00')
+ await expect(page.locator('.analytics-metric').filter({hasText:'Win rate'})).toContainText('50.00%')
+ await page.getByLabel('Include open unrealized P&L in total').check()
+ await expect(page.locator('.analytics-metric').filter({hasText:'Total gross P&L'})).toContainText('—')
+ await page.screenshot({path:`/tmp/analytics-${info.project.name}.jpg`,type:'jpeg',quality:60,fullPage:true,scale:'css'})
+ expect(await page.evaluate(()=>document.documentElement.scrollWidth <= innerWidth)).toBeTruthy()
+ await page.getByRole('button',{name:'Paper trading',exact:true}).click()
+ await expect(page.getByText('No records match this view.')).toBeVisible()
+ expect(errors).toEqual([])
+})

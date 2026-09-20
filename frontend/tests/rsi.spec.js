@@ -1,0 +1,35 @@
+import { test, expect } from '@playwright/test'
+
+test('daily RSI column displays unavailable values and settings bounds save independently', async ({page}, info) => {
+  let config={index_name:'NIFTY500',universe_mode:'index',ma_type:'SMMA',length:5,delay:0,offset_sigma:6,alma_offset:.85,pe_filter_operator:'none',rsi_min:null,rsi_max:null}
+  await page.route('**/api/session',r=>r.fulfill({json:{connected:true}}))
+  await page.route('**/api/scanner/config',r=>{if(r.request().method()==='POST')config=r.request().postDataJSON();return r.fulfill({json:config})})
+  await page.route('**/api/scanner/results',r=>r.fulfill({json:{config,last_run:null,results:[{symbol:'ANGELONE',signal_type:'BUY',trigger_date:'2026-09-04',trigger_price:300,current_price:305,rsi_14_1d:66.480942,rsi_date:'2026-09-07'},{symbol:'SHORT',signal_type:'BUY',trigger_date:'2026-09-04',trigger_price:10,current_price:11,rsi_14_1d:null}]}}))
+  async function navigate(name) {
+    if(info.project.name==='mobile')await page.getByRole('button',{name:'Open navigation menu'}).click()
+    await page.getByRole('button',{name:new RegExp(name)}).click()
+  }
+  await page.request.post('/api/login',{data:{username:'fixture-user',password:'fixture-password'}})
+ await page.goto('/')
+  await navigate('Signals')
+  await expect(page.getByRole('button',{name:'RSI (14 · 1D)',exact:true})).toBeVisible()
+  await expect(page.getByText('66.48',{exact:true})).toBeVisible()
+  await navigate('Settings')
+  await expect(page.locator('.settings-disclosure')).toHaveCount(6)
+  await page.locator('summary').filter({hasText:'RSI filters'}).click()
+  await page.getByLabel('Exclude RSI below').fill('30')
+  await page.getByLabel('Exclude RSI above').fill('70')
+  await page.getByRole('button',{name:'Save settings'}).click()
+  await expect.poll(()=>[config.rsi_min,config.rsi_max]).toEqual([30,70])
+  await page.reload()
+  await navigate('Settings')
+  await expect(page.locator('.settings-disclosure')).toHaveCount(6)
+  await page.locator('summary').filter({hasText:'RSI filters'}).click()
+  await expect(page.getByLabel('Exclude RSI below')).toHaveValue('30')
+  await page.getByLabel('Exclude RSI below').fill('')
+  await page.getByRole('button',{name:'Save settings'}).click()
+  await expect.poll(()=>[config.rsi_min,config.rsi_max]).toEqual([null,70])
+  await page.getByLabel('Exclude RSI above').fill('')
+  await page.getByRole('button',{name:'Save settings'}).click()
+  await expect.poll(()=>[config.rsi_min,config.rsi_max]).toEqual([null,null])
+})

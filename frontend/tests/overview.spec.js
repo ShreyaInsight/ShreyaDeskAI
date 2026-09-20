@@ -1,0 +1,25 @@
+import {test,expect} from '@playwright/test'
+
+test('Overview refreshes all metrics without relying on scanner results',async({page})=>{
+  await page.clock.install()
+  let calls=0
+  await page.route('**/api/overview',r=>{calls++;return r.fulfill({json:{config:{mode:'live',enabled:false,paused:true},positions:[{status:'CLOSED'},{status:'CLOSED'}],warnings:calls>1?['Missing prices: APP']:[],updated_at:new Date().toISOString(),metrics:{openPositions:[{symbol:'APP'}],cumulativePnl:calls>2?null:calls>1?-45:123.45,winRate:calls>1?75:50,openOrders:calls>1?0:2,recentOrders:[],topGainer:null,topLoser:null}}})})
+  await page.request.post('/api/login',{data:{username:'fixture-user',password:'fixture-password'}})
+  await page.goto('/')
+  const card=name=>page.locator('.overview-card').filter({hasText:name})
+  await expect(card('Cumulative P&L')).toContainText('+₹123.45')
+  await expect(card('Cumulative P&L')).toHaveClass(/pnl-gain/)
+  await expect(card('Win rate')).toContainText('50%')
+  await expect(card('Open orders').locator('strong')).toHaveText('2')
+  await page.getByRole('button',{name:'Refresh',exact:true}).click()
+  await expect(card('Cumulative P&L')).toContainText('-₹45')
+  await expect(card('Cumulative P&L')).toHaveClass(/pnl-loss/)
+  await expect(card('Win rate')).toContainText('75%')
+  await expect(card('Open orders').locator('strong')).toHaveText('0')
+  await expect(page.getByText('Missing prices: APP')).toBeVisible()
+  await page.clock.fastForward(30_000)
+  await expect.poll(()=>calls).toBe(3)
+  await expect(card('Cumulative P&L')).toContainText('Unavailable')
+  await expect(card('Cumulative P&L')).toHaveClass(/pnl-neutral/)
+  await page.screenshot({path:'test-results/overview-'+page.viewportSize().width+'.png',fullPage:true})
+})

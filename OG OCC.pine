@@ -1,0 +1,179 @@
+// @version=6
+// OCC Strategy Optimized (MA 5 + Delayed TSL) — CNC / Indian Equities / LONG ONLY
+//
+// Special Thanks to the original author: JustUncleL (https://in.tradingview.com/u/JustUncleL/)
+// Modified for CNC (Cash and Carry / delivery-based) trading in Indian equities.
+// CNC is delivery-only: no shorting, no leverage/margin. All short-side logic
+// has been removed. An optional Indian-equity delivery cost model (STT on sell)
+// is included so backtest P&L is realistic.
+strategy(title = "OCC Strategy Optimized (MA 5 + Delayed TSL) - CNC Long Only", shorttitle = "OCC Opt CNC",
+  overlay = true, pyramiding = 0, default_qty_type = strategy.percent_of_equity, default_qty_value = 10,
+  initial_capital = 100000, margin_long = 100, margin_short = 0, calc_on_every_tick = false,
+  commission_type = strategy.commission.percent, commission_value = 0.1)
+  // commission_value = 0.1% approximates STT (0.1% on sell side for delivery/CNC).
+  // Brokerage on CNC delivery trades is ₹0 with most Indian discount brokers,
+  // so this is deliberately conservative. Set commission_value = 0 to disable.
+
+// === INPUTS ===
+useRes      = input.bool(defval = true, title = "Use Alternate Resolution?")
+intRes      = input.float(defval = 3.0, title = "Multiplier for Alernate Resolution", minval = 0.1, step = 0.1)
+stratRes    = timeframe.ismonthly? str.tostring(timeframe.multiplier*intRes,"###M") : timeframe.isweekly? str.tostring(timeframe.multiplier*intRes,"###W") : timeframe.isdaily?  str.tostring(timeframe.multiplier*intRes,"###D") : timeframe.isintraday ? str.tostring(timeframe.multiplier*intRes,"####") : '60'
+basisType   = input.string(defval = "SMMA", title = "MA Type: ", options=["SMA", "EMA", "DEMA", "TEMA", "WMA", "VWMA", "SMMA", "HullMA", "LSMA", "ALMA", "SSMA", "TMA"])
+basisLen    = input.int(defval = 5, title = "MA Period", minval = 1)
+offsetSigma = input.int(defval = 6, title = "Offset for LSMA / Sigma for ALMA", minval = 0)
+offsetALMA  = input.float(defval = 0.85, title = "Offset for ALMA", minval = 0, step = 0.01)
+scolor      = input.bool(defval = false, title="Show coloured Bars to indicate Trend?")
+delayOffset = input.int(defval = 0, title = "Delay Open/Close MA (Forces Non-Repainting)", minval = 0, step = 1)
+// CNC = delivery-only. No SHORT / BOTH option — only LONG or NONE.
+tradeType   = input.string(defval = "LONG", title="What trades should be taken (CNC = Long only): ", options=["LONG", "NONE"])
+
+// TRAILING STOP & RISK MANAGEMENT INPUTS
+useTSL           = input.bool(true, title="Use Trailing Stop Loss?")
+tslPct           = input.float(1.5, title="Trailing Stop %", minval=0.1, step=0.1) / 100
+tslActivationPct = input.float(2.0, title="TSL Activation % (Delay)", minval=0.1, step=0.1) / 100
+slPct            = input.float(2.0, title="Initial Fixed Stop Loss %", minval=0.1, step=0.1) / 100
+useTP            = input.bool(true, title="Use Take Profit?")
+tpPct            = input.float(5.0, title="Take Profit %", minval=0.1, step=0.1) / 100
+
+// RANGING MARKET FILTER (Optional)
+useADXFilter     = input.bool(defval = false, title = "Use ADX Filter (Avoid Range)?", group = "Filters")
+useAutoADX       = input.bool(defval = true, title = "Auto-Detect Threshold?", group = "Filters", tooltip = "When enabled, the strategy automatically determines the ranging threshold based on historical trend strength.")
+adxThreshold     = input.int(defval = 20, title = "Manual ADX Threshold", minval = 1, group = "Filters", tooltip = "Only used if Auto-Detect is OFF. ADX above this level indicates a strong trend.")
+adxLen           = input.int(defval = 14, title = "ADX Length", minval = 1, group = "Filters")
+adxLookback      = input.int(defval = 200, title = "Auto-Detect Lookback", minval = 10, group = "Filters", tooltip = "Number of bars used to calculate the adaptive threshold.")
+
+// CNC-specific: Indian equity sessions run 09:15–15:30 IST. Optional filter to
+// avoid opening fresh positions right at the close (delivery trades still settle
+// T+1 either way, but avoids illiquid last-minute prints).
+useSessionFilter = input.bool(defval = false, title = "Restrict entries to NSE/BSE session?", group = "Session")
+sessionWindow     = input.session(defval = "0915-1530", title = "Session Window (IST)", group = "Session")
+inSession         = not na(time(timeframe.period, sessionWindow))
+session_pass      = not useSessionFilter or inSession
+
+// === /INPUTS ===
+
+// ADX Logic
+dirmov(len) =>
+	up = ta.change(high)
+	down = -ta.change(low)
+	plusDM = na(up) ? na : (up > down and up > 0 ? up : 0)
+	minusDM = na(down) ? na : (down > up and down > 0 ? down : 0)
+	truerange = ta.rma(ta.tr, len)
+	plus = fixnan(100 * ta.rma(plusDM, len) / truerange)
+	minus = fixnan(100 * ta.rma(minusDM, len) / truerange)
+	[plus, minus]
+
+adx(dilen, adxlen) =>
+	[plus, minus] = dirmov(dilen)
+	sum = plus + minus
+	adx_val = 100 * ta.rma(math.abs(plus - minus) / (sum == 0 ? 1 : sum), adxlen)
+	adx_val
+
+adx_value = adx(adxLen, adxLen)
+
+float currentThreshold = float(adxThreshold)
+if useAutoADX
+    currentThreshold := ta.percentile_linear_interpolation(adx_value, adxLookback, 50)
+
+adx_pass  = not useADXFilter or adx_value > currentThreshold
+
+// Constants
+green100 = #008000FF
+lime100  = #00FF00FF
+red100   = #FF0000FF
+
+// === BASE FUNCTIONS ===
+variant(type, src, len, offSig, offALMA) =>
+    v1 = ta.sma(src, len)
+    v2 = ta.ema(src, len)
+    v3 = 2 * v2 - ta.ema(v2, len)
+    v4 = 3 * (v2 - ta.ema(v2, len)) + ta.ema(ta.ema(v2, len), len)
+    v5 = ta.wma(src, len)
+    v6 = ta.vwma(src, len)
+    v7 = 0.0
+    v7 := na(v7[1]) ? ta.sma(src, len) : (v7[1] * (len - 1) + src) / len
+    v8 = ta.wma(2 * ta.wma(src, len / 2) - ta.wma(src, len), math.round(math.sqrt(len)))
+    v9 = ta.linreg(src, len, offSig)
+    v10 = ta.alma(src, len, offALMA, offSig)
+    v11 = ta.sma(v1,len)
+    a1 = math.exp(-1.414*3.14159 / len)
+    b1 = 2*a1*math.cos(1.414*3.14159 / len)
+    c2 = b1
+    c3 = (-a1)*a1
+    c1 = 1 - c2 - c3
+    v12 = 0.0
+    v12 := c1*(src + nz(src[1])) / 2 + c2*nz(v12[1]) + c3*nz(v12[2])
+    type=="EMA"?v2 : type=="DEMA"?v3 : type=="TEMA"?v4 : type=="WMA"?v5 : type=="VWMA"?v6 : type=="SMMA"?v7 : type=="HullMA"?v8 : type=="LSMA"?v9 : type=="ALMA"?v10 : type=="TMA"?v11: type=="SSMA"?v12: v1
+
+reso(exp, use, res) => use ? request.security(syminfo.tickerid, res, exp, gaps=barmerge.gaps_off, lookahead=barmerge.lookahead_on) : exp
+
+// === SERIES SETUP ===
+closeSeries     = variant(basisType, close[delayOffset], basisLen, offsetSigma, offsetALMA)
+openSeries      = variant(basisType, open[delayOffset], basisLen, offsetSigma, offsetALMA)
+
+// === PLOTTING ===
+closeSeriesAlt = reso(closeSeries, useRes, stratRes)
+openSeriesAlt = reso(openSeries, useRes, stratRes)
+
+trendColour = (closeSeriesAlt > openSeriesAlt) ? color.green : color.red
+bcolour     = (closeSeries > openSeriesAlt) ? lime100 : red100
+barcolor(scolor?bcolour:na, title = "Bar Colours")
+closeP=plot(nz(closeSeriesAlt), title = "Close Series", color = color.new(trendColour, 20), linewidth = 2, style = plot.style_line)
+openP=plot(nz(openSeriesAlt), title = "Open Series", color = color.new(trendColour, 20), linewidth = 2, style = plot.style_line)
+
+// === ENTRY/EXIT SIGNALS ===
+// Long entry: close-series crosses above open-series (bullish flip)
+// Long exit signal: close-series crosses below open-series (bearish flip) — used to flatten, never to short
+xlong       = ta.crossover(closeSeriesAlt, openSeriesAlt)
+xshort      = ta.crossunder(closeSeriesAlt, openSeriesAlt)
+longCond    = xlong
+flattenCond = xshort   // CNC: this exits the long, it never opens a short
+
+// Entry Logic (LONG ONLY — no strategy.short anywhere)
+if (tradeType == "LONG")
+    if (longCond and adx_pass and session_pass)
+        strategy.entry("long", strategy.long)
+
+    // Bearish flip closes the long outright (CNC has no short leg to flip into)
+    if (flattenCond)
+        strategy.close("long", comment = "Trend Flip Exit")
+
+// TRAILING STOP LOGIC (DELAYED ACTIVATION) — long side only
+var float long_tsl_price = na
+var bool active_trade_l = false
+
+if (strategy.position_size == 0)
+    long_tsl_price := na
+    active_trade_l := false
+
+if (strategy.position_size > 0)
+    entry_price = strategy.position_avg_price
+
+    // Check Activation
+    if (high > entry_price * (1 + tslActivationPct))
+        active_trade_l := true
+
+    // Calculate Stop Prices
+    fixed_stop = entry_price * (1 - slPct)
+    trail_stop = high * (1 - tslPct)
+
+    if (active_trade_l)
+        prev_valid = na(long_tsl_price) ? fixed_stop : long_tsl_price
+        long_tsl_price := math.max(trail_stop, prev_valid)
+    else
+        long_tsl_price := fixed_stop
+
+// PLOT TSL
+plot(useTSL and strategy.position_size > 0 ? long_tsl_price : na, color = color.blue, style = plot.style_circles, linewidth = 2, title = "Long TSL")
+
+tsl_activated_l = ta.change(active_trade_l) and active_trade_l
+plotshape(tsl_activated_l, "Long TSL Activation", shape.diamond, location.abovebar, color.blue, size = size.tiny, text = "TSL ON", textcolor = color.blue)
+
+// EXITS (long only)
+if (strategy.position_size > 0)
+    if (useTSL)
+        strategy.exit("SL/TSL L", "long", stop = long_tsl_price)
+    if (useTP)
+        strategy.exit("TP L", "long", limit = strategy.position_avg_price * (1 + tpPct))
+
+// === /STRATEGY ===

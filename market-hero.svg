@@ -1,0 +1,64 @@
+<svg width="1200" height="630" viewBox="0 0 1200 630" fill="none" xmlns="http://www.w3.org/2000/svg">
+  <title>ShreyaDesk - Zerodha trading research dashboard</title>
+  <desc>A focused market desk for OCC signals, holdings, analytics, and controlled auto-trading.</desc>
+  <defs>
+    <linearGradient id="background" x1="0" y1="0" x2="1200" y2="630" gradientUnits="userSpaceOnUse">
+      <stop stop-color="#0B0D0F"/>
+      <stop offset="1" stop-color="#181818"/>
+    </linearGradient>
+    <radialGradient id="accentGlow" cx="0" cy="0" r="1" gradientUnits="userSpaceOnUse" gradientTransform="translate(1010 540) rotate(-132) scale(430 360)">
+      <stop stop-color="#FF4500" stop-opacity="0.2"/>
+      <stop offset="1" stop-color="#FF4500" stop-opacity="0"/>
+    </radialGradient>
+    <pattern id="grid" width="36" height="36" patternUnits="userSpaceOnUse">
+      <path d="M36 0H0V36" stroke="#C8D0CC" stroke-opacity="0.045"/>
+    </pattern>
+    <filter id="shadow" x="-20%" y="-20%" width="140%" height="140%">
+      <feDropShadow dx="0" dy="16" stdDeviation="18" flood-color="#000000" flood-opacity="0.35"/>
+    </filter>
+  </defs>
+
+  <rect width="1200" height="630" fill="url(#background)"/>
+  <rect width="1200" height="630" fill="url(#grid)"/>
+  <rect width="1200" height="630" fill="url(#accentGlow)"/>
+
+  <g opacity="0.7">
+    <path d="M0 520C110 486 166 518 248 478C340 432 396 466 478 424C574 375 636 424 716 370C813 304 881 352 952 292C1034 222 1106 258 1200 184" stroke="#FF4500" stroke-opacity="0.16" stroke-width="2"/>
+    <path d="M0 520C110 486 166 518 248 478C340 432 396 466 478 424C574 375 636 424 716 370C813 304 881 352 952 292C1034 222 1106 258 1200 184" stroke="#FF4500" stroke-width="5" stroke-dasharray="2 22"/>
+  </g>
+
+  <g filter="url(#shadow)">
+    <rect x="752" y="92" width="304" height="370" rx="10" fill="#101313" stroke="#29302F"/>
+    <rect x="776" y="118" width="80" height="8" rx="4" fill="#FF4500"/>
+    <rect x="776" y="145" width="154" height="12" rx="6" fill="#C8D0CC" fill-opacity="0.78"/>
+    <rect x="776" y="167" width="106" height="8" rx="4" fill="#8A9490" fill-opacity="0.75"/>
+    <path d="M778 378L817 343L850 355L888 292L925 316L963 248L1008 270" stroke="#FF4500" stroke-width="4" stroke-linecap="round" stroke-linejoin="round"/>
+    <path d="M778 378L817 343L850 355L888 292L925 316L963 248L1008 270V405H778V378Z" fill="#FF4500" fill-opacity="0.08"/>
+    <path d="M778 405H1010M778 365H1010M778 325H1010M778 285H1010" stroke="#29302F"/>
+    <circle cx="1008" cy="270" r="6" fill="#FF4500"/>
+    <rect x="776" y="426" width="68" height="8" rx="4" fill="#5B9A5D"/>
+    <rect x="856" y="426" width="54" height="8" rx="4" fill="#8A9490" fill-opacity="0.6"/>
+  </g>
+
+  <g font-family="Manrope, Arial, sans-serif">
+    <rect x="86" y="84" width="38" height="38" rx="9" fill="#FF4500"/>
+    <path d="M96 103.5L105 94L114 103.5L105 112L96 103.5Z" fill="#0B0D0F"/>
+    <text x="142" y="112" fill="#EDE8DC" font-family="Manrope, Arial, sans-serif" font-size="25" font-weight="800" letter-spacing="-0.6">ShreyaDesk</text>
+
+    <text x="88" y="218" fill="#8A9490" font-family="DM Mono, monospace" font-size="14" letter-spacing="2.1">PRIVATE MARKET CONSOLE</text>
+    <text x="84" y="306" fill="#EDE8DC" font-family="Manrope, Arial, sans-serif" font-size="67" font-weight="800" letter-spacing="-2.4">Your market desk,</text>
+    <text x="84" y="377" fill="#EDE8DC" font-family="Manrope, Arial, sans-serif" font-size="67" font-weight="800" letter-spacing="-2.4">quietly <tspan fill="#FF4500">in control.</tspan></text>
+    <text x="88" y="426" fill="#8A9490" font-family="Manrope, Arial, sans-serif" font-size="19" font-weight="500">OCC signals, analytics, and risk-aware Zerodha execution.</text>
+  </g>
+
+  <g font-family="DM Mono, monospace" font-size="14">
+    <rect x="88" y="501" width="116" height="36" rx="6" fill="#101313" stroke="#29302F"/>
+    <text x="107" y="524" fill="#C8D0CC">SIGNALS</text>
+    <rect x="216" y="501" width="137" height="36" rx="6" fill="#101313" stroke="#29302F"/>
+    <text x="235" y="524" fill="#C8D0CC">ANALYTICS</text>
+    <rect x="365" y="501" width="126" height="36" rx="6" fill="#101313" stroke="#29302F"/>
+    <text x="384" y="524" fill="#C8D0CC">RISK GATES</text>
+  </g>
+
+  <text x="1112" y="572" text-anchor="end" fill="#8A9490" font-family="DM Mono, monospace" font-size="14" letter-spacing="1.2">ZERODHA / SINGLE-USER VM</text>
+</svg>

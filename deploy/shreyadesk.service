@@ -1,0 +1,28 @@
+[Unit]
+Description=ShreyaDesk trading dashboard API
+After=network-online.target
+Wants=network-online.target
+
+[Service]
+Type=simple
+User=@APP_USER@
+Group=@APP_USER@
+WorkingDirectory=@PROJECT_DIR@
+Environment=SHREYADESK_RUNTIME_DIR=@RUNTIME_DIR@
+EnvironmentFile=-@RUNTIME_DIR@/shreyadesk.env
+ExecStart=@PROJECT_DIR@/.venv/bin/uvicorn backend.main:app --host 127.0.0.1 --port 8000
+Restart=on-failure
+RestartSec=5
+NoNewPrivileges=true
+PrivateTmp=true
+ProtectSystem=full
+ProtectControlGroups=true
+ProtectKernelTunables=true
+ProtectKernelModules=true
+RestrictSUIDSGID=true
+LockPersonality=true
+RestrictRealtime=true
+RestrictNamespaces=true
+
+[Install]
+WantedBy=multi-user.target

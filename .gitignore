@@ -1,0 +1,34 @@
+# Credentials and private runtime state
+.env
+.env.*
+!.env.example
+.kite_token.json
+credentials.txt
+*secret*
+*.pem
+*.key
+scanner.sqlite3*
+telegram.sqlite3*
+*.sqlite
+*.sqlite3
+*.db
+*.history.lock
+
+# Local tools and generated output
+.venv/
+venv/
+__pycache__/
+*.py[cod]
+.pytest_cache/
+.mypy_cache/
+.ruff_cache/
+frontend/node_modules/
+frontend/dist/
+frontend/test-results/
+frontend/playwright-report/
+test-results/
+audit/
+.DS_Store
+
+# Loose local reference image
+/sample.png
